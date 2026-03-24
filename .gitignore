@@ -1,19 +1,24 @@
+# Python
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
 
+# Environments
 .env
 .venv
 venv/
 
+# MLflow
 mlflow.db
 mlruns/
 *.db
 
+# OS / notebooks
 .DS_Store
 .ipynb_checkpoints/
 
-predictions.csv
-monitoring_logs_*.csv
-*.html
+# Generated artifacts
+*.csv
+prediction_logs.json
+drift_report.html
