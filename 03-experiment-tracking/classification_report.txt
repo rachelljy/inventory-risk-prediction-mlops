@@ -1,9 +1,0 @@
-                precision    recall  f1-score   support
-
-Overstock Risk       0.00      0.00      0.00       888
-     Safe Zone       0.74      1.00      0.85      9094
- Stockout Risk       0.00      0.00      0.00      2318
-
-      accuracy                           0.74     12300
-     macro avg       0.25      0.33      0.28     12300
-  weighted avg       0.55      0.74      0.63     12300
