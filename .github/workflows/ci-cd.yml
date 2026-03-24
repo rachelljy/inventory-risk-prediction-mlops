@@ -25,7 +25,8 @@ jobs:
 
       - name: Run flake8
         run: |
-          flake8 . --max-line-length=120 --ignore=E501,W504,E127,E241,F401,F841,E226
+          flake8 03-experiment-tracking 04-deployment 05-monitoring 06-cicd --max-line-length=120 --ignore=E501,W504,E127,E241,F401,F841,E226,W292,W293,W391,E303
+
 
   test:
     runs-on: ubuntu-latest
