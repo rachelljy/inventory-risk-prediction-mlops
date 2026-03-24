@@ -1,0 +1,25 @@
+{
+  "class_names": [
+    "Overstock Risk",
+    "Safe Zone",
+    "Stockout Risk"
+  ],
+  "feature_columns": [
+    "Inventory Level",
+    "Units Sold",
+    "Units Ordered",
+    "Price",
+    "Discount",
+    "Units_Sold_Lag1",
+    "Inventory_Change_Pct",
+    "Days_of_Stock",
+    "Sales_Velocity",
+    "Coverage_Ratio",
+    "Forecast_Error",
+    "Order_to_Inventory",
+    "Category",
+    "Region",
+    "Weather Condition",
+    "Seasonality"
+  ]
+}
