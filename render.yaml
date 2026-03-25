@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: inventory-risk-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./06-cicd/Dockerfile
+    dockerContext: ./06-cicd
+    healthCheckPath: /health
+    autoDeploy: true
