@@ -1,273 +1,306 @@
-"""
-2_Model_Performance.py  ·  Page 3 — Experiment results, confusion matrices, selection rationale
-"""
-import sys, os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from __future__ import annotations
 
-import streamlit as st
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
-import seaborn as sns
-import style
+import streamlit as st
 
-st.set_page_config(page_title="Model Performance · IRP", page_icon="📊", layout="wide")
-style.inject()
-style.sidebar()
+# ── page config ──────────────────────────────────────────────────────────────
+st.set_page_config(page_title="Model Performance · IRP", page_icon="📈", layout="wide")
 
-st.markdown('<div class="page-title">📊 Model Performance</div>', unsafe_allow_html=True)
-st.markdown('<div class="page-subtitle">MLflow experiment results · confusion matrices · model selection rationale.</div>',
-            unsafe_allow_html=True)
-st.markdown("---")
+# ── hard-coded data ───────────────────────────────────────────────────────────
 
-# ── t+1 framing note ──────────────────────────────────────────────────────────
-st.info("""
-**⏱️ t+1 prediction framing** — all metrics below are measured on the **held-out test set** using 
-a temporal split. The model predicts *tomorrow's* risk label from *today's* features. 
-This means there is no data leakage from future rows, and performance figures represent 
-realistic one-day-ahead forecasting ability.
-""")
+CLASS_LABELS = ["Overstock Risk", "Safe Zone", "Stockout Risk"]
 
-st.markdown("---")
-
-# ── model comparison table ────────────────────────────────────────────────────
-st.markdown('<div class="sec-head">Model comparison</div>', unsafe_allow_html=True)
-
-results = pd.DataFrame({
-    "Model": [
-        "XGBoost + SMOTE ✅",
-        "Random Forest + SMOTE",
-        "Logistic Regression + SMOTE",
-        "XGBoost (no SMOTE)",
-        "Random Forest (no SMOTE)",
-        "Logistic Regression (baseline)",
-    ],
-    "Weighted F1":        [0.792, 0.741, 0.683, 0.724, 0.698, 0.651],
-    "Macro F1":           [0.641, 0.592, 0.531, 0.558, 0.527, 0.481],
-    "Recall — Stockout":  [0.830, 0.790, 0.740, 0.710, 0.680, 0.630],
-    "Precision — Stockout":[0.781, 0.742, 0.694, 0.819, 0.786, 0.741],
-    "F1 — Stockout":      [0.805, 0.765, 0.716, 0.761, 0.730, 0.682],
-    "Recall — Overstock": [0.310, 0.280, 0.210, 0.120, 0.100, 0.060],
-    "Precision — Overstock":[0.362,0.301,0.238,0.195,0.161,0.090],
-    "F1 — Overstock":     [0.334, 0.290, 0.222, 0.150, 0.125, 0.072],
-    "Accuracy":           [0.804, 0.768, 0.718, 0.782, 0.751, 0.701],
-})
-
-def highlight_row(row):
-    if "✅" in str(row["Model"]):
-        return ["background-color:#f0fdf4;font-weight:600"] * len(row)
-    return [""] * len(row)
-
-def colour_metric(val):
-    if not isinstance(val, float): return ""
-    if val >= 0.75:  return "color:#15803d;font-weight:600"
-    if val >= 0.50:  return "color:#b45309"
-    return "color:#b91c1c"
-
-styled = (
-    results.style
-    .apply(highlight_row, axis=1)
-    .applymap(colour_metric, subset=[
-        "Weighted F1","Macro F1",
-        "Recall — Stockout","Recall — Overstock",
-        "F1 — Stockout","F1 — Overstock"
-    ])
-    .format({c: "{:.3f}" for c in results.columns if results[c].dtype == float})
-)
-st.dataframe(styled, use_container_width=True, hide_index=True)
-st.caption("✅ = selected production model  |  Colour: 🟢 ≥0.75  🟡 ≥0.50  🔴 <0.50")
-
-st.markdown("---")
-
-# ── four-panel bar chart ───────────────────────────────────────────────────────
-st.markdown('<div class="sec-head">Four-metric comparison (top 3 models)</div>', unsafe_allow_html=True)
-
-models_short = ["XGBoost\n+SMOTE", "Random Forest\n+SMOTE", "Logistic Reg.\n+SMOTE"]
-metrics_4    = {
-    "Weighted F1":        [0.792, 0.741, 0.683],
-    "Recall — Stockout":  [0.830, 0.790, 0.740],
-    "Recall — Overstock": [0.310, 0.280, 0.210],
-    "Precision — Overstock":[0.362,0.301,0.238],
+CLASSIFICATION_REPORTS = {
+    "Logistic Regression": {
+        "Overstock Risk": {"Precision": 0.12, "Recall": 0.52, "F1": 0.19},
+        "Safe Zone":      {"Precision": 0.67, "Recall": 0.25, "F1": 0.37},
+        "Stockout Risk":  {"Precision": 0.80, "Recall": 0.85, "F1": 0.82},
+        "_summary": {"Accuracy": 0.60, "Macro F1": 0.46, "Weighted F1": 0.61},
+    },
+    "Random Forest": {
+        "Overstock Risk": {"Precision": 0.12, "Recall": 0.41, "F1": 0.19},
+        "Safe Zone":      {"Precision": 0.65, "Recall": 0.45, "F1": 0.53},
+        "Stockout Risk":  {"Precision": 0.86, "Recall": 0.83, "F1": 0.84},
+        "_summary": {"Accuracy": 0.66, "Macro F1": 0.52, "Weighted F1": 0.69},
+    },
+    "XGBoost": {
+        "Overstock Risk": {"Precision": 0.13, "Recall": 0.28, "F1": 0.17},
+        "Safe Zone":      {"Precision": 0.66, "Recall": 0.61, "F1": 0.64},
+        "Stockout Risk":  {"Precision": 0.88, "Recall": 0.81, "F1": 0.84},
+        "_summary": {"Accuracy": 0.70, "Macro F1": 0.55, "Weighted F1": 0.72},
+    },
 }
-palette = ["#0b1120","#64748b","#cbd5e1"]
 
-fig_4, axes_4 = plt.subplots(1, 4, figsize=(16, 4.2), sharey=False)
+CONFUSION_MATRICES = {
+    "Logistic Regression": pd.DataFrame(
+        [[381, 159, 186],
+         [2258, 1200, 1295],
+         [591, 436, 5794]],
+        index=CLASS_LABELS,
+        columns=CLASS_LABELS,
+    ),
+    "Random Forest": pd.DataFrame(
+        [[296, 354, 76],
+         [1760, 2152, 841],
+         [366, 803, 5652]],
+        index=CLASS_LABELS,
+        columns=CLASS_LABELS,
+    ),
+    "XGBoost": pd.DataFrame(
+        [[201, 465, 60],
+         [1135, 2920, 698],
+         [265, 1034, 5522]],
+        index=CLASS_LABELS,
+        columns=CLASS_LABELS,
+    ),
+}
 
-for ax, (metric, vals) in zip(axes_4, metrics_4.items()):
-    x   = np.arange(len(models_short))
-    bars = ax.bar(x, vals, color=palette, edgecolor="white", linewidth=1, width=0.55)
-    ax.set_xticks(x)
-    ax.set_xticklabels(models_short, fontsize=8)
-    ax.set_ylim(0, min(vals) * 0.6 if min(vals) > 0 else 0, )
-    ax.set_ylim(0, max(vals) * 1.28)
-    ax.set_title(metric, fontsize=9, fontweight="bold", pad=6)
-    ax.spines[["top","right"]].set_visible(False)
-    ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda v,_: f"{v:.2f}"))
+# ── helpers ───────────────────────────────────────────────────────────────────
+
+def format_metric(value):
+    if value is None or (isinstance(value, float) and np.isnan(value)):
+        return "—"
+    return f"{float(value):.3f}"
+
+
+def build_results_df() -> pd.DataFrame:
+    rows = []
+    for model_name, report in CLASSIFICATION_REPORTS.items():
+        summary = report["_summary"]
+        row = {
+            "Model": model_name,
+            "Macro F1": summary["Macro F1"],
+            "Accuracy": summary["Accuracy"],
+        }
+        for class_label in CLASS_LABELS:
+            for metric_name in ["Precision", "Recall", "F1"]:
+                row[f"{class_label} {metric_name}"] = report[class_label][metric_name]
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    df = df.sort_values(by="Macro F1", ascending=False).reset_index(drop=True)
+    return df
+
+
+def highlight_selected_model(row: pd.Series):
+    model_name = str(row.get("Model", "")).strip().lower()
+    if model_name == "xgboost":
+        return ["background-color: #d1fae5; font-weight: 700;" for _ in row]
+    return ["" for _ in row]
+
+
+def plot_bar_chart(df, value_column, title, ylabel, highlight_model="XGBoost", figsize=(3.4, 4.0)):
+    chart_df = df[["Model", value_column]].dropna().copy()
+    if chart_df.empty:
+        return
+    chart_df = chart_df.sort_values(by=value_column, ascending=False)
+
+    colors = [
+        "#16a34a" if str(m).strip().lower() == highlight_model.strip().lower() else "#94a3b8"
+        for m in chart_df["Model"]
+    ]
+
+    fig, ax = plt.subplots(figsize=figsize)
+    bars = ax.bar(chart_df["Model"], chart_df[value_column], color=colors)
+
+    ax.set_title(title, fontsize=11, fontweight="bold")
+    ax.set_ylabel(ylabel, fontsize=10)
+    ax.set_xlabel("")
+    ymax = chart_df[value_column].max()
+    ax.set_ylim(0, min(1.0, ymax * 1.18 if ymax > 0 else 1.0))
+    ax.tick_params(axis="x", rotation=0, labelsize=8)
     ax.tick_params(axis="y", labelsize=8)
-    for bar, val in zip(bars, vals):
-        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + max(vals)*0.02,
-                f"{val:.3f}", ha="center", va="bottom", fontsize=8, color="#475569")
+    ax.spines[["top", "right"]].set_visible(False)
+    ax.set_xticks(range(len(chart_df["Model"])))
+    ax.set_xticklabels([str(m).replace(" ", "\n") for m in chart_df["Model"]])
 
-patches = [mpatches.Patch(color=c, label=m.replace("\n"," "))
-           for c, m in zip(palette, models_short)]
-fig_4.legend(handles=patches, loc="lower center", ncol=3, fontsize=8,
-             bbox_to_anchor=(0.5, -0.08), frameon=False)
-plt.tight_layout()
-st.pyplot(fig_4, use_container_width=True)
-plt.close()
+    for bar, value in zip(bars, chart_df[value_column]):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 0.01,
+            f"{value:.3f}",
+            ha="center", va="bottom", fontsize=8, fontweight="bold",
+        )
+
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
+def plot_heatmap(matrix_df: pd.DataFrame, title: str, normalize: bool = False):
+    data = matrix_df.astype(float)
+    if normalize:
+        row_sums = data.sum(axis=1).replace(0, np.nan)
+        data = data.div(row_sums, axis=0).fillna(0) * 100
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.2))
+    image = ax.imshow(data.values, aspect="auto", cmap="Blues")
+    ax.set_title(title)
+    ax.set_xlabel("Predicted")
+    ax.set_ylabel("Actual")
+    ax.set_xticks(range(len(data.columns)))
+    ax.set_xticklabels(data.columns, rotation=30, ha="right")
+    ax.set_yticks(range(len(data.index)))
+    ax.set_yticklabels(data.index)
+
+    max_val = data.values.max()
+    for row_idx in range(data.shape[0]):
+        for col_idx in range(data.shape[1]):
+            value = data.iat[row_idx, col_idx]
+            label = f"{value:.1f}%" if normalize else f"{int(round(value))}"
+            color = "white" if value > max_val * 0.5 else "black"
+            ax.text(col_idx, row_idx, label, ha="center", va="center",
+                    fontsize=11, fontweight="bold", color=color)
+
+    fig.colorbar(image, ax=ax, fraction=0.046, pad=0.04)
+    plt.tight_layout()
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
+
+
+def generate_confusion_matrix_insights(model_name: str) -> str:
+    name = model_name.strip().lower()
+    if name == "xgboost":
+        return """
+**Key insights**
+- **Best Safe Zone recall** of all models: 2920/4753 correct (61.5%) — a clear improvement over the other two models
+- **Overstock Risk is poorly detected**: only 201/726 correct (27.7% recall) — the worst Overstock performance across all models; 465 cases bleed into Safe Zone
+- **Stockout Risk is strong**: 5522/6821 correct (80.9% recall), though slightly lower than Logistic Regression
+- **Balanced error distribution**: misclassifications are spread more evenly, avoiding the extreme Safe Zone collapse seen in Logistic Regression
+
+**Takeaway:** Best overall model — it improves Safe Zone detection significantly while keeping Stockout Risk recall high. The main weakness is Overstock Risk, which is heavily confused with Safe Zone.
+"""
+    elif name == "random forest":
+        return """
+**Key insights**
+- **Overstock Risk recall is low**: 296/726 correct (40.8%) — most misclassified as Safe Zone (354), making it unreliable for catching overstock situations
+- **Safe Zone is mediocre**: 2152/4753 correct (45.3% recall) — large bleed into Overstock Risk (1760 cases misclassified), the highest cross-class leak of any model
+- **Stockout Risk is solid**: 5652/6821 correct (82.9% recall), second best across models
+- **Systematic bias toward Overstock Risk predictions**: the Overstock column receives the most off-diagonal spill (1760 Safe Zone + 366 Stockout), inflating false positives for that class
+
+**Takeaway:** Middle-ground model — decent Stockout detection, but Safe Zone and Overstock Risk performance is unreliable. The large Safe Zone → Overstock leak would generate excessive false overstock alerts in production.
+"""
+    elif name == "logistic regression":
+        return """
+**Key insights**
+- **Worst Safe Zone detection**: only 1200/4753 correct (25.2% recall) — 2258 Safe Zone cases are wrongly predicted as Overstock Risk, by far the largest single misclassification across all models
+- **Best Stockout Risk recall**: 5794/6821 correct (84.9%) — the highest of all three models, but at the cost of everything else
+- **Overstock Risk is partially detected**: 381/726 correct (52.5% recall) — best Overstock recall of all models, but largely a side effect of the model over-predicting Overstock across the board
+- **Heavily biased toward Overstock Risk and Stockout Risk**: the model struggles to distinguish Safe Zone, treating most samples as one of the two risk classes
+
+**Takeaway:** Worst overall model — its high Stockout recall is misleading, as it comes from a systematic over-prediction of risk classes. It completely fails at Safe Zone detection, which would flood operations with false alarms.
+"""
+    return "No insights available."
+
+
+# ── page header ───────────────────────────────────────────────────────────────
+
+st.markdown(
+    """
+    <div style="display: flex; align-items: center; gap: 14px; margin-top: 6px;">
+        <span style="font-size: 42px; line-height: 1;">📊</span>
+        <h1 style="
+            margin: 0;
+            font-size: 3rem;
+            font-weight: 800;
+            line-height: 1.1;
+            letter-spacing: -0.5px;
+        ">
+            Model Performance
+        </h1>
+    </div>
+    <p style="
+        color: #64748b;
+        font-size: 1.1rem;
+        margin-top: 10px;
+        margin-bottom: 0;
+    ">
+        Experiment results · confusion matrices · model selection rationale.
+    </p>
+    """,
+    unsafe_allow_html=True,
+)
+st.markdown("<hr style='margin-top: 18px; margin-bottom: 22px;'>", unsafe_allow_html=True)
+
+# ── summary metrics ───────────────────────────────────────────────────────────
+
+summary_col1, summary_col2, summary_col3 = st.columns(3)
+summary_col1.metric("Experiments", 1)
+summary_col2.metric("Runs loaded", 3)
+summary_col3.metric("Best model", "XGBoost")
 
 st.markdown("---")
 
-# ── confusion matrices (tabbed) ───────────────────────────────────────────────
-st.markdown('<div class="sec-head">Confusion matrices</div>', unsafe_allow_html=True)
-st.markdown('<span style="font-size:0.82rem;color:#64748b">Select a model tab. '
-            'Left = raw counts · Right = row-normalised % (recall view).</span>',
-            unsafe_allow_html=True)
-st.markdown("")
+# ── results table ─────────────────────────────────────────────────────────────
 
-LABELS = ["Stockout\nRisk", "Overstock\nRisk", "Safe\nZone"]
+results_df = build_results_df()
 
-# Approximate matrices scaled to ~15,000 test samples
-cms = {
-    "XGBoost + SMOTE ✅": np.array([
-        [4560, 135, 405],
-        [ 148, 195, 307],
-        [ 660, 270, 8320],
-    ]),
-    "Random Forest + SMOTE": np.array([
-        [4334, 190, 576],
-        [ 165, 175, 310],
-        [ 840, 360, 7950],
-    ]),
-    "Logistic Regression + SMOTE": np.array([
-        [4056, 230, 814],
-        [ 195, 132, 323],
-        [ 960, 420, 7870],
-    ]),
-}
+st.markdown('<p style="font-size:1.2rem; font-weight:700; letter-spacing:0.02em;">All models</p>', unsafe_allow_html=True)
 
-tabs = st.tabs(list(cms.keys()))
-
-for tab, (model_name, cm) in zip(tabs, cms.items()):
-    with tab:
-        cm_pct = cm / cm.sum(axis=1, keepdims=True) * 100
-
-        fig_cm, axes_cm = plt.subplots(1, 2, figsize=(12, 4.5))
-
-        sns.heatmap(cm, annot=True, fmt="d", cmap="Blues",
-                    xticklabels=LABELS, yticklabels=LABELS,
-                    ax=axes_cm[0], linewidths=0.5, linecolor="#e2e8f0",
-                    cbar=False, annot_kws={"size":10})
-        axes_cm[0].set_title("Counts", fontsize=10, fontweight="bold", pad=8)
-        axes_cm[0].set_xlabel("Predicted", fontsize=9)
-        axes_cm[0].set_ylabel("Actual", fontsize=9)
-        axes_cm[0].tick_params(labelsize=8)
-
-        sns.heatmap(cm_pct, annot=True, fmt=".1f", cmap="RdYlGn",
-                    xticklabels=LABELS, yticklabels=LABELS,
-                    ax=axes_cm[1], linewidths=0.5, linecolor="#e2e8f0",
-                    cbar=False, annot_kws={"size":10}, vmin=0, vmax=100)
-        axes_cm[1].set_title("Row-Normalised % (Recall view)", fontsize=10, fontweight="bold", pad=8)
-        axes_cm[1].set_xlabel("Predicted", fontsize=9)
-        axes_cm[1].set_ylabel("Actual", fontsize=9)
-        axes_cm[1].tick_params(labelsize=8)
-
-        plt.suptitle(model_name, fontsize=11, fontweight="bold", y=1.01)
-        plt.tight_layout()
-        st.pyplot(fig_cm, use_container_width=True)
-        plt.close()
-
-        # per-class bar chart inside each tab
-        cls_labels   = ["Stockout Risk", "Overstock Risk", "Safe Zone"]
-        precisions_m = {"XGBoost + SMOTE ✅":[0.781,0.362,0.925],
-                        "Random Forest + SMOTE":[0.742,0.301,0.902],
-                        "Logistic Regression + SMOTE":[0.694,0.238,0.878]}
-        recalls_m    = {"XGBoost + SMOTE ✅":[0.830,0.310,0.890],
-                        "Random Forest + SMOTE":[0.790,0.280,0.865],
-                        "Logistic Regression + SMOTE":[0.740,0.210,0.840]}
-        f1s_m        = {"XGBoost + SMOTE ✅":[0.805,0.334,0.907],
-                        "Random Forest + SMOTE":[0.765,0.290,0.883],
-                        "Logistic Regression + SMOTE":[0.716,0.222,0.858]}
-
-        prec = precisions_m[model_name]
-        rec  = recalls_m[model_name]
-        f1   = f1s_m[model_name]
-        xx   = np.arange(len(cls_labels))
-        w    = 0.25
-
-        fig_cls, ax_cls = plt.subplots(figsize=(9, 3.5))
-        b1 = ax_cls.bar(xx-w, prec, w, label="Precision", color="#3b82f6", alpha=0.85, edgecolor="white")
-        b2 = ax_cls.bar(xx,   rec,  w, label="Recall",    color="#22c55e", alpha=0.85, edgecolor="white")
-        b3 = ax_cls.bar(xx+w, f1,   w, label="F1",        color="#f59e0b", alpha=0.85, edgecolor="white")
-        ax_cls.set_xticks(xx)
-        ax_cls.set_xticklabels(cls_labels, fontsize=9)
-        ax_cls.set_ylim(0, 1.12)
-        ax_cls.set_title("Per-class Precision / Recall / F1", fontsize=10, fontweight="bold", pad=8)
-        ax_cls.legend(fontsize=9, framealpha=0.7)
-        ax_cls.spines[["top","right"]].set_visible(False)
-        ax_cls.axhline(0.5, color="#e2e8f0", linewidth=1, linestyle="--")
-        for grp in [b1,b2,b3]:
-            for bar in grp:
-                ax_cls.text(bar.get_x()+bar.get_width()/2, bar.get_height()+0.01,
-                            f"{bar.get_height():.2f}",
-                            ha="center", va="bottom", fontsize=7.5, color="#475569")
-        plt.tight_layout()
-        st.pyplot(fig_cls, use_container_width=True)
-        plt.close()
-
-st.markdown("---")
-
-# ── Why XGBoost ───────────────────────────────────────────────────────────────
-st.markdown('<div class="sec-head">Why XGBoost was selected as the production model</div>',
-            unsafe_allow_html=True)
-
-st.markdown("""
-<div style="background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:1.25rem">
-    <strong style="font-family:'IBM Plex Mono',monospace">🏆 SELECTED: XGBoost + SMOTE</strong><br>
-    <span style="font-size:0.85rem;color:#475569">
-    Weighted F1 0.792 · Stockout Recall 0.830 · Macro F1 0.641
-    </span>
-</div>
-""", unsafe_allow_html=True)
-
-reasons = [
-    ("Stockout recall: 83%",
-     "The highest recall on the most business-critical class across every configuration tested. "
-     "Missing a real stockout costs 5–10× more than an unnecessary alert — so recall is the primary optimisation target."),
-    ("Best weighted F1: 79.2%",
-     "Despite severe class imbalance (~3% Overstock rows), XGBoost achieves the most balanced overall performance, "
-     "outperforming Random Forest by 5.1 pp and Logistic Regression by 10.9 pp."),
-    ("SMOTE was essential",
-     "Without oversampling, minority-class recall fell sharply. SMOTE gave the model enough training signal on "
-     "Stockout and Overstock rows to learn meaningful decision boundaries."),
-    ("Handles non-linearity",
-     "Inventory signals — rolling windows, lag features, velocity ratios, coverage ratios — have complex "
-     "multiplicative interactions that gradient-boosted trees capture far better than a linear model."),
-    ("Calibrated probability outputs",
-     "XGBoost's predicted probabilities are well-calibrated, making the confidence scores in the Risk Predictor "
-     "demo interpretable and actionable."),
-    ("Full MLflow traceability",
-     "Every hyperparameter, metric, and model artefact is logged automatically. Any result in this app "
-     "can be reproduced by pointing MLflow at the same experiment run."),
+preferred_columns = ["Model", "Macro F1", "Accuracy"]
+class_metric_columns = [
+    col for col in results_df.columns
+    if col not in {"Model", "Macro F1", "Accuracy"} and col.endswith(("Precision", "Recall", "F1"))
 ]
+visible_columns = preferred_columns + sorted(class_metric_columns)
 
-r1, r2 = st.columns(2)
-for i, (title, desc) in enumerate(reasons):
-    col = r1 if i % 2 == 0 else r2
+styled_df = (
+    results_df[visible_columns]
+    .style
+    .format({col: format_metric for col in visible_columns if col != "Model"})
+    .apply(highlight_selected_model, axis=1)
+)
+
+st.dataframe(styled_df, use_container_width=True, hide_index=True)
+st.caption("Rows are sorted by Macro F1. XGBoost is highlighted in green because it was selected.")
+
+# ── comparison charts ─────────────────────────────────────────────────────────
+
+st.markdown("---")
+st.markdown('<p style="font-size:1.2rem; font-weight:700; letter-spacing:0.02em;">Model comparison charts</p>', unsafe_allow_html=True)
+st.markdown(
+    "<p style='letter-spacing: 0.18em; text-transform: uppercase; color: #94a3b8; font-weight: 700; margin-bottom: 0.5rem;'>"
+    "Four-metric comparison (top models)"
+    "</p>",
+    unsafe_allow_html=True,
+)
+
+chart_metrics = ["Macro F1", "Accuracy", "Stockout Risk F1", "Stockout Risk Recall"]
+
+chart_columns = st.columns(len(chart_metrics))
+for col, metric in zip(chart_columns, chart_metrics):
     with col:
-        st.markdown(f"""
-        <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;
-                    padding:1rem 1.25rem;margin-bottom:0.75rem">
-            <div style="font-family:'IBM Plex Mono',monospace;font-size:0.88rem;
-                        font-weight:600;color:#0b1120;margin-bottom:0.3rem">
-                {i+1:02d}. {title}
-            </div>
-            <div style="font-size:0.83rem;color:#64748b;line-height:1.55">{desc}</div>
-        </div>""", unsafe_allow_html=True)
+        plot_bar_chart(results_df, metric, metric, metric, highlight_model="XGBoost", figsize=(3.4, 4.0))
 
-st.info("""
-💡 **Overstock recall limitation (0.31):** Despite SMOTE, the Overstock class remains the hardest to detect —  
-only ~3% of records, with ~4% day-to-day persistence. Improving this would require either more real-world 
-overstock events in the data, or a separate binary classifier dedicated to that class.
-""")
+st.caption("XGBoost is highlighted in green.")
+
+# ── confusion matrices ────────────────────────────────────────────────────────
+
+st.markdown(
+    """
+    <div style="margin-top: 10px;">
+        <h2 style="margin-bottom: 5px;">📊 Model Confusion Matrices</h2>
+        <p style="color: #64748b; font-size: 15px; margin-bottom: 0;">
+            These matrices show how each model performs across risk categories.
+            The diagonal represents correct predictions, while off-diagonal values highlight misclassifications.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
+
+for model_name, matrix_df in CONFUSION_MATRICES.items():
+    st.markdown("---")
+    st.markdown(f"### {model_name}")
+
+    left, right = st.columns(2)
+
+    with left:
+        plot_heatmap(matrix_df, f"{model_name} confusion matrix", normalize=False)
+
+    with right:
+        insights = generate_confusion_matrix_insights(model_name)
+        st.markdown("#### 📊 Model insights")
+        st.markdown(insights)

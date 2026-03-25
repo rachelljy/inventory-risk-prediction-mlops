@@ -57,8 +57,8 @@ st.markdown('<div class="sec-head">Headline results</div>', unsafe_allow_html=Tr
 
 k1, k2, k3 = st.columns(3)
 kpis = [
-    ("83%",  "Stockout Recall",       "XGBoost · test set", "#fee2e2", "#b91c1c"),
-    ("79.2%","F1 Score",              "XGBoost weighted avg", "#dbeafe", "#1d4ed8"),
+    ("71.9%", "Train Macro F1", "test set", "#fee2e2", "#b91c1c"),
+    ("70.0%", "Test Accuracy", "weighted avg", "#dbeafe", "#1d4ed8"),
     ("100",  "Products Monitored",    "5 stores × 20 products", "#dcfce7", "#15803d"),
 ]
 for col, (val, lbl, sub, bg, fg) in zip([k1, k2, k3], kpis):

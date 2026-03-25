@@ -26,9 +26,9 @@ def load_data(path: str) -> pd.DataFrame:
     df = df.sort_values(["Store ID", "Product ID", "Date"]).reset_index(drop=True)
 
     # Apply risk labels (same thresholds as config.yaml)
-    theta_low  = 1.0
-    theta_high = 1.5
-    low_sales  = 0.5
+    theta_low  = 1.2
+    theta_high = 4.5
+    low_sales  = 0.8
 
     df["_stock_risk"]    = df["Inventory Level"] < df["Demand Forecast"] * theta_low
     df["_over_risk"]     = (df["Inventory Level"] > df["Demand Forecast"] * theta_high) & \
